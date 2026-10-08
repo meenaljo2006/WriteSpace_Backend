@@ -91,6 +91,13 @@ const envSchema = z
     SMTP_USER: z.string().min(1, "SMTP_USER is required"),
     SMTP_PASS: z.string().min(1, "SMTP_PASS is required"),
 
+    // Embedding Model
+    
+    OLLAMA_BASE_URL: z.string().url().default("http://localhost:11434"),
+    EMBEDDING_MODEL: z.string().default("bge-large:335m-en-v1.5-fp16"),
+    EMBEDDING_DIMENSIONS: z.coerce.number().int().positive().default(1024),
+    EMBEDDING_BATCH_SIZE: z.coerce.number().int().positive().default(16),
+
     // OAuth
 
     GOOGLE_CLIENT_ID: z.string().optional(),

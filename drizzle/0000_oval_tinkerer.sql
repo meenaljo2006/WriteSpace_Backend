@@ -167,6 +167,15 @@ CREATE TABLE "interaction_events" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "post_embeddings" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"post_id" uuid NOT NULL,
+	"chunk_index" integer NOT NULL,
+	"chunk_text" text NOT NULL,
+	"embedding" vector(1024) NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 ALTER TABLE "comment_reactions" ADD CONSTRAINT "comment_reactions_comment_id_comments_id_fk" FOREIGN KEY ("comment_id") REFERENCES "public"."comments"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "comment_reactions" ADD CONSTRAINT "comment_reactions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "comments" ADD CONSTRAINT "comments_post_id_posts_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -185,6 +194,7 @@ ALTER TABLE "notification_deliveries" ADD CONSTRAINT "notification_deliveries_no
 ALTER TABLE "post_saves" ADD CONSTRAINT "post_saves_post_id_posts_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "post_saves" ADD CONSTRAINT "post_saves_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "interaction_events" ADD CONSTRAINT "interaction_events_actor_id_users_id_fk" FOREIGN KEY ("actor_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "post_embeddings" ADD CONSTRAINT "post_embeddings_post_id_posts_id_fk" FOREIGN KEY ("post_id") REFERENCES "public"."posts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "comments_post_parent_created_id_idx" ON "comments" USING btree ("post_id","parent_comment_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "comments_parent_created_id_idx" ON "comments" USING btree ("parent_comment_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "follows_following_created_idx" ON "follows" USING btree ("following_id","created_at");--> statement-breakpoint
@@ -198,4 +208,6 @@ CREATE INDEX "notification_deliveries_status_idx" ON "notification_deliveries" U
 CREATE INDEX "post_saves_user_created_idx" ON "post_saves" USING btree ("user_id","created_at");--> statement-breakpoint
 CREATE INDEX "interaction_events_actor_created_idx" ON "interaction_events" USING btree ("actor_id","created_at");--> statement-breakpoint
 CREATE INDEX "interaction_events_target_created_idx" ON "interaction_events" USING btree ("target_type","target_id","created_at");--> statement-breakpoint
-CREATE INDEX "interaction_events_type_created_idx" ON "interaction_events" USING btree ("event_type","created_at");
+CREATE INDEX "interaction_events_type_created_idx" ON "interaction_events" USING btree ("event_type","created_at");--> statement-breakpoint
+CREATE INDEX "post_embeddings_post_id_idx" ON "post_embeddings" USING btree ("post_id");--> statement-breakpoint
+CREATE INDEX "post_embeddings_embedding_hnsw_idx" ON "post_embeddings" USING hnsw ("embedding" vector_cosine_ops);

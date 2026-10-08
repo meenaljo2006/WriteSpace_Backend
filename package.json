@@ -15,7 +15,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "db:seed": "ts-node -r tsconfig-paths/register src/scripts/seed.ts"
+    "db:seed": "ts-node -r tsconfig-paths/register src/scripts/seed.ts",
+    "db:backfill-embeddings": "ts-node -r tsconfig-paths/register src/scripts/backfill-embeddings.ts"
   },
   "keywords": [],
   "author": "",

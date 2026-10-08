@@ -1083,7 +1083,7 @@ async function main() {
     UPDATE comments SET like_count = COALESCE(sub.c, 0)
     FROM (
       SELECT comment_id, COUNT(*)::int AS c
-      FROM comment_likes
+      FROM comment_reactions
       GROUP BY comment_id
     ) sub
     WHERE comments.id = sub.comment_id

@@ -1,9 +1,11 @@
 import { eq } from "drizzle-orm";
+
 import { db } from "../../db";
 import { posts } from "../../db/schema";
 
 import { AppError } from "@shared/utils/app.error";
 import { HTTP_STATUS } from "@shared/constants/http-codes";
+import { enqueueEmbedPost } from "@shared/queues/embedding.queue";
 import env from "@config/env";
 
 import { interactionsService } from "../interactions/interactions.service";
@@ -21,6 +23,9 @@ class PostService {
    */
   public async createPost(authorId: string, data: CreatePostData) {
     const postId = await postCommandService.createPost(authorId, data);
+
+    // Queue embedding generation asynchronously (non-blocking)
+    await enqueueEmbedPost(postId, "created");
 
     return this.getPost(postId, authorId);
   }
@@ -59,11 +64,18 @@ class PostService {
   ) {
     await postCommandService.updatePost(postId, userId, data);
 
+    // Re-embed on update — title / content / tags may have changed
+    await enqueueEmbedPost(postId, "updated");
+
     return this.getPost(postId, userId);
   }
 
   /**
    * Move a post to trash.
+   *
+   * Note: trashing is a soft delete (status → "trash").
+   * The embedding pipeline detects the status change and
+   * removes existing embeddings for the post.
    */
   public async deletePost(
     postId: string,
@@ -71,13 +83,21 @@ class PostService {
     isAdmin: boolean = false,
   ): Promise<void> {
     await postCommandService.trashPost(postId, userId, isAdmin);
+
+    // Trigger pipeline to clean up embeddings (status != published)
+    await enqueueEmbedPost(postId, "updated");
   }
 
   /**
    * Restore a trashed post.
+   *
+   * Re-embedding is triggered here because the post may
+   * return to "published" status.
    */
   public async restorePost(postId: string, userId: string): Promise<void> {
     await postCommandService.restorePost(postId, userId);
+
+    await enqueueEmbedPost(postId, "updated");
   }
 
   /**

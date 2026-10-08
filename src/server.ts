@@ -11,6 +11,8 @@ import { client as redisClient } from "./config/redis";
 
 import logger from "./config/logger";
 
+import "./shared/queues/embedding.worker";
+
 async function startServer(): Promise<void> {
   try {
     logger.info("Starting WriteSpace server...");
