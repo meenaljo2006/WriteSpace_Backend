@@ -73,7 +73,7 @@ npm run db:migrate
 npm run dev
 ```   
 
-> **Note:** PostgreSQL and Redis must be running locally. See **[DEVELOPER.md](./DEVELOPER.md)** for setup instructions.  
+> **Note:** PostgreSQL and Redis must be running locally.   
 
 ### Environment Variables (.env) 
 
@@ -310,3 +310,11 @@ writespace/
 | `POST` | `/:id/follow` | Toggle follow/unfollow for a user | Bearer |
 | `PUT` | `/:id` | Update profile fields & images (Multipart/form-data) | Owner / Admin |
 | `DELETE` | `/:id` | Suspend or soft-delete account | Owner / Admin |   
+
+### Future Scope 
+
+- Real-time Chat and Messaging
+- Video Conferencing and Live Streaming
+- Advanced Recommendation Systems
+- Semantic Search for Intelligent Content Discovery
+- AI-Assisted Content Improvement for Posts
