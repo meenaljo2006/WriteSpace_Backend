@@ -10,6 +10,7 @@ import { botInterceptor } from "./shared/middlewares/bot-interceptor.middleware"
 import { env } from "./config/env";
 import { configurePassport } from "./modules/auth/auth.utils";
 import passport from "passport";
+import searchRoutes from "./modules/search/search.routes";
 
 dotenv.config();
 
@@ -33,6 +34,7 @@ app.use(botInterceptor);
 // app.use("/api/v1", apiLimiter);
 
 app.use("/api/v1", routes);
+app.use("/api/v1/search", searchRoutes);
 app.use(errorHandler);
 
 app.get("/health", (_req, res) => {
