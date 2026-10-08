@@ -1,0 +1,26 @@
+import { Queue } from "bullmq";
+import { bullmqRedisConnection } from "@config/bullmq";
+import { IEmailPayload } from "@modules/notification/interface/email.interface";
+
+// 1. Create the Queue instance
+// Note: connection options are passed from the shared redis config or directly here
+export const emailQueue = new Queue<IEmailPayload>("email-queue", {
+  connection: bullmqRedisConnection,
+});
+
+/**
+ * Adds an email job to the queue.
+ * @param job {IEmailJob} - The email payload.
+ */
+export const addEmailJob = async (job: IEmailPayload) => {
+  // Retry strategy: 3 attempts with exponential backoff
+  await emailQueue.add("send-email", job, {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 1000,
+    },
+    removeOnComplete: true, // Keep Redis clean
+    removeOnFail: false, // Keep failed jobs for debugging
+  });
+};
