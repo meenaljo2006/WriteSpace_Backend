@@ -25,6 +25,8 @@ export const parseFormDataJson = (
     "codeSnippets",
     "existingMedia",
     "existingMediaPublicIds",
+    "personal_info",
+    "social_links",
   ];
 
   for (const field of jsonFields) {

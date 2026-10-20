@@ -45,7 +45,6 @@ router.post(
 router.post(
   "/forgot-password",
   emailActionLimiter,
-  authenticate,
   validate(forgotPasswordSchema),
   authController.forgotPassword,
 );

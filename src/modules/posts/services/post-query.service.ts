@@ -23,6 +23,15 @@ class PostQueryService {
                   and ${postReactions.reactionType} = 'like'
               )
             `.mapWith(Boolean),
+
+            isFollowingByMe: sql<boolean>`
+              exists(
+                select 1
+                from ${follows}
+                where ${follows.followerId} = ${requesterId}
+                  and ${follows.followingId} = ${posts.authorId}
+              )
+            `.mapWith(Boolean),
           }
         : {}),
     };
@@ -54,6 +63,8 @@ class PostQueryService {
         username: row.authorUsername,
         fullname: row.authorFullname,
         profileImageUrl: row.authorProfileImage,
+        isFollowingByMe:
+          "isFollowingByMe" in row ? !!row.isFollowingByMe : false,
       },
     };
   }
