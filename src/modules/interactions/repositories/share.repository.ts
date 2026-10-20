@@ -1,5 +1,4 @@
 import { and, desc, eq, lt,sql } from "drizzle-orm";
-
 import { db } from "../../../db";
 import { posts, shares } from "../../../db/schema";
 
