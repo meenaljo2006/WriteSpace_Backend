@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "../../../db";
-import { commentReactions, postReactions } from "../../../db/schema";
+import { comments,commentReactions, posts, postReactions, } from "../../../db/schema";
 import type { ReactionType } from "../contracts/reaction.types";
 
 export class ReactionRepository {
@@ -46,14 +46,9 @@ export class ReactionRepository {
     reactionType: ReactionType,
   ) {
     return db.transaction(async (tx) => {
-      /*
-       * Lock the existing row when it exists.
-       *
-       * If no row exists, another concurrent request may insert it.
-       * Therefore the INSERT uses ON CONFLICT DO NOTHING instead of
-       * relying on a 23505 exception, which would abort the PostgreSQL
-       * transaction.
-       */
+      let previousReactionType: ReactionType | null = null;
+      let reaction: typeof postReactions.$inferSelect | undefined;
+
       const existing = await tx
         .select({
           reactionType: postReactions.reactionType,
@@ -68,103 +63,85 @@ export class ReactionRepository {
         .for("update")
         .limit(1);
 
-      if (existing.length === 0) {
+      if (existing.length > 0) {
+        previousReactionType = existing[0].reactionType;
+
+        if (previousReactionType === reactionType) {
+          return { previousReactionType, reaction: existing[0] };
+        }
+
+        const updated = await tx
+          .update(postReactions)
+          .set({ reactionType, updatedAt: new Date() })
+          .where(
+            and(
+              eq(postReactions.postId, postId),
+              eq(postReactions.userId, userId),
+            ),
+          )
+          .returning();
+
+        reaction = updated[0];
+      } else {
         const inserted = await tx
           .insert(postReactions)
-          .values({
-            postId,
-            userId,
-            reactionType,
-          })
+          .values({ postId, userId, reactionType })
           .onConflictDoNothing({
             target: [postReactions.postId, postReactions.userId],
           })
           .returning();
 
         if (inserted.length > 0) {
-          return {
-            previousReactionType: null,
-            reaction: inserted[0],
-          };
+          reaction = inserted[0];
+          previousReactionType = null;
+        } else {
+          const concurrent = await tx
+            .select({ reactionType: postReactions.reactionType })
+            .from(postReactions)
+            .where(
+              and(
+                eq(postReactions.postId, postId),
+                eq(postReactions.userId, userId),
+              ),
+            )
+            .for("update")
+            .limit(1);
+
+          previousReactionType = concurrent[0]?.reactionType ?? null;
+
+          if (previousReactionType === reactionType) {
+            return { previousReactionType, reaction: concurrent[0] };
+          }
+
+          const updated = await tx
+            .update(postReactions)
+            .set({ reactionType, updatedAt: new Date() })
+            .where(
+              and(
+                eq(postReactions.postId, postId),
+                eq(postReactions.userId, userId),
+              ),
+            )
+            .returning();
+
+          reaction = updated[0];
         }
+      }
 
-        /*
-         * A concurrent transaction inserted the reaction.
-         *
-         * The INSERT has now completed successfully, so the
-         * transaction is still valid. We can safely read the row.
-         */
-        const concurrentExisting = await tx
-          .select({
-            reactionType: postReactions.reactionType,
-          })
-          .from(postReactions)
-          .where(
-            and(
-              eq(postReactions.postId, postId),
-              eq(postReactions.userId, userId),
-            ),
-          )
-          .for("update")
-          .limit(1);
+      const likeDelta =
+        (previousReactionType === "like" ? -1 : 0) +
+        (reactionType === "like" ? 1 : 0);
 
-        const previousReactionType =
-          concurrentExisting[0]?.reactionType ?? null;
-
-        if (previousReactionType === reactionType) {
-          return {
-            previousReactionType,
-            reaction: concurrentExisting[0],
-          };
-        }
-
-        const updated = await tx
-          .update(postReactions)
+      if (likeDelta !== 0) {
+        await tx
+          .update(posts)
           .set({
-            reactionType,
-            updatedAt: new Date(),
+            likeCount: sql`GREATEST(${posts.likeCount} + ${likeDelta}, 0)`,
           })
-          .where(
-            and(
-              eq(postReactions.postId, postId),
-              eq(postReactions.userId, userId),
-            ),
-          )
-          .returning();
-
-        return {
-          previousReactionType,
-          reaction: updated[0],
-        };
+          .where(eq(posts.id, postId));
       }
 
-      const previousReactionType = existing[0]?.reactionType ?? null;
-
-      if (previousReactionType === reactionType) {
-        return {
-          previousReactionType,
-          reaction: existing[0],
-        };
-      }
-
-      const updated = await tx
-        .update(postReactions)
-        .set({
-          reactionType,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(postReactions.postId, postId),
-            eq(postReactions.userId, userId),
-          ),
-        )
-        .returning();
-
-      return {
-        previousReactionType,
-        reaction: updated[0],
-      };
+      return { previousReactionType, reaction };
     });
   }
 
@@ -174,6 +151,9 @@ export class ReactionRepository {
     reactionType: ReactionType,
   ) {
     return db.transaction(async (tx) => {
+      let previousReactionType: ReactionType | null = null;
+      let reaction: typeof commentReactions.$inferSelect | undefined;
+
       const existing = await tx
         .select({
           reactionType: commentReactions.reactionType,
@@ -188,102 +168,85 @@ export class ReactionRepository {
         .for("update")
         .limit(1);
 
-      if (existing.length === 0) {
+      if (existing.length > 0) {
+        previousReactionType = existing[0].reactionType;
+
+        if (previousReactionType === reactionType) {
+          return { previousReactionType, reaction: existing[0] };
+        }
+
+        const updated = await tx
+          .update(commentReactions)
+          .set({ reactionType, updatedAt: new Date() })
+          .where(
+            and(
+              eq(commentReactions.commentId, commentId),
+              eq(commentReactions.userId, userId),
+            ),
+          )
+          .returning();
+
+        reaction = updated[0];
+      } else {
         const inserted = await tx
           .insert(commentReactions)
-          .values({
-            commentId,
-            userId,
-            reactionType,
-          })
+          .values({ commentId, userId, reactionType })
           .onConflictDoNothing({
             target: [commentReactions.commentId, commentReactions.userId],
           })
           .returning();
 
         if (inserted.length > 0) {
-          return {
-            previousReactionType: null,
-            reaction: inserted[0],
-          };
+          reaction = inserted[0];
+          previousReactionType = null;
+        } else {
+          const concurrent = await tx
+            .select({ reactionType: commentReactions.reactionType })
+            .from(commentReactions)
+            .where(
+              and(
+                eq(commentReactions.commentId, commentId),
+                eq(commentReactions.userId, userId),
+              ),
+            )
+            .for("update")
+            .limit(1);
+
+          previousReactionType = concurrent[0]?.reactionType ?? null;
+
+          if (previousReactionType === reactionType) {
+            return { previousReactionType, reaction: concurrent[0] };
+          }
+
+          const updated = await tx
+            .update(commentReactions)
+            .set({ reactionType, updatedAt: new Date() })
+            .where(
+              and(
+                eq(commentReactions.commentId, commentId),
+                eq(commentReactions.userId, userId),
+              ),
+            )
+            .returning();
+
+          reaction = updated[0];
         }
+      }
 
-        /*
-         * A concurrent request inserted the reaction.
-         * The transaction remains valid because ON CONFLICT
-         * handled the conflict without raising 23505.
-         */
-        const concurrentExisting = await tx
-          .select({
-            reactionType: commentReactions.reactionType,
-          })
-          .from(commentReactions)
-          .where(
-            and(
-              eq(commentReactions.commentId, commentId),
-              eq(commentReactions.userId, userId),
-            ),
-          )
-          .for("update")
-          .limit(1);
+      const likeDelta =
+        (previousReactionType === "like" ? -1 : 0) +
+        (reactionType === "like" ? 1 : 0);
 
-        const previousReactionType =
-          concurrentExisting[0]?.reactionType ?? null;
-
-        if (previousReactionType === reactionType) {
-          return {
-            previousReactionType,
-            reaction: concurrentExisting[0],
-          };
-        }
-
-        const updated = await tx
-          .update(commentReactions)
+      if (likeDelta !== 0) {
+        await tx
+          .update(comments)
           .set({
-            reactionType,
-            updatedAt: new Date(),
+            likeCount: sql`GREATEST(${comments.likeCount} + ${likeDelta}, 0)`,
           })
-          .where(
-            and(
-              eq(commentReactions.commentId, commentId),
-              eq(commentReactions.userId, userId),
-            ),
-          )
-          .returning();
-
-        return {
-          previousReactionType,
-          reaction: updated[0],
-        };
+          .where(eq(comments.id, commentId));
       }
 
-      const previousReactionType = existing[0]?.reactionType ?? null;
-
-      if (previousReactionType === reactionType) {
-        return {
-          previousReactionType,
-          reaction: existing[0],
-        };
-      }
-
-      const updated = await tx
-        .update(commentReactions)
-        .set({
-          reactionType,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(commentReactions.commentId, commentId),
-            eq(commentReactions.userId, userId),
-          ),
-        )
-        .returning();
-
-      return {
-        previousReactionType,
-        reaction: updated[0],
-      };
+      return { previousReactionType, reaction };
     });
   }
 
