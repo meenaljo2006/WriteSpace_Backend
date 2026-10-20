@@ -20,12 +20,6 @@ export class SaveService {
 
     const saved = await saveRepository.createSave(actorId, postId);
 
-    /*
-     * Idempotent operation:
-     * the post was already saved by this user.
-     *
-     * No state changed, so no interaction event is created.
-     */
     if (!saved) {
       return {
         userId: actorId,
@@ -61,10 +55,6 @@ export class SaveService {
 
     const saved = await saveRepository.deleteSave(actorId, postId);
 
-    /*
-     * No existing save means no state changed.
-     * Therefore no save.removed event is created.
-     */
     if (!saved) {
       return {
         userId: actorId,
@@ -115,7 +105,45 @@ export class SaveService {
       throw new AppError(HTTP_STATUS.BAD_REQUEST, "Invalid cursor");
     }
 
-    return saveRepository.getSavedPosts(userId, limit, parsedCursor);
+    const rows = await saveRepository.getSavedPosts(
+      userId,
+      limit,
+      parsedCursor,
+    );
+
+    const nextCursor =
+      rows.length === limit
+        ? (rows[rows.length - 1]?.savedAt?.toISOString() ?? null)
+        : null;
+
+    // Map the flat DB rows to the nested Post structure expected by the frontend
+    const posts = rows.map((row) => {
+      const {
+        authorUsername,
+        authorProfileImage,
+        authorFullname,
+        savedAt,
+        isLikedByMe,
+        isFollowingByMe,
+        ...postFields
+      } = row;
+
+      void savedAt; // Used for cursor
+
+      return {
+        ...postFields,
+        isLikedByMe,
+        author: {
+          id: postFields.authorId,
+          username: authorUsername,
+          fullname: authorFullname,
+          profileImageUrl: authorProfileImage,
+          isFollowingByMe,
+        },
+      };
+    });
+
+    return { posts, nextCursor };
   }
 }
 

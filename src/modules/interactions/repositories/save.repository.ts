@@ -1,7 +1,13 @@
-import { and, desc, eq, lt, sql ,SQL} from "drizzle-orm";
+import { and, desc, eq, lt, sql, SQL } from "drizzle-orm";
 
 import { db } from "../../../db";
-import {follows, postReactions, posts, postSaves, users,} from "../../../db/schema";
+import {
+  follows,
+  postReactions,
+  posts,
+  postSaves,
+  users,
+} from "../../../db/schema";
 
 export class SaveRepository {
   async findSave(userId: string, postId: string) {
@@ -93,19 +99,18 @@ export class SaveRepository {
         readTime: posts.readTime,
         createdAt: posts.createdAt,
 
-        // Author
+        // Author fields
         authorUsername: users.username,
         authorProfileImage: users.profileImageUrl,
         authorFullname: users.fullname,
 
-        // Save metadata (used for pagination cursor and cleanup)
+        // Save metadata
         savedAt: postSaves.createdAt,
 
-        // Viewer-relative flags
+        // Viewer flags
         isLikedByMe: sql<boolean>`
           exists(
-            select 1
-            from ${postReactions}
+            select 1 from ${postReactions}
             where ${postReactions.postId} = ${posts.id}
               and ${postReactions.userId} = ${userId}
               and ${postReactions.reactionType} = 'like'
@@ -114,8 +119,7 @@ export class SaveRepository {
 
         isFollowingByMe: sql<boolean>`
           exists(
-            select 1
-            from ${follows}
+            select 1 from ${follows}
             where ${follows.followerId} = ${userId}
               and ${follows.followingId} = ${posts.authorId}
           )

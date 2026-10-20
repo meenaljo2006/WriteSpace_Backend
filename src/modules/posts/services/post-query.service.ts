@@ -1,6 +1,6 @@
 import { eq, and, desc, lt, SQL, inArray, sql } from "drizzle-orm";
 import { db } from "../../../db";
-import { posts, postReactions, users, follows } from "../../../db/schema";
+import { posts, postReactions, postSaves, users, follows } from "../../../db/schema";
 import { AppError } from "@shared/utils/app.error";
 import { HTTP_STATUS } from "@shared/constants/http-codes";
 
@@ -21,6 +21,15 @@ class PostQueryService {
                 where ${postReactions.postId} = ${posts.id}
                   and ${postReactions.userId} = ${requesterId}
                   and ${postReactions.reactionType} = 'like'
+              )
+            `.mapWith(Boolean),
+
+            isSavedByMe: sql<boolean>`
+              exists(
+                select 1
+                from ${postSaves}
+                where ${postSaves.postId} = ${posts.id}
+                  and ${postSaves.userId} = ${requesterId}
               )
             `.mapWith(Boolean),
 
@@ -57,6 +66,7 @@ class PostQueryService {
       ...row.post,
 
       isLikedByMe: "isLikedByMe" in row ? !!row.isLikedByMe : false,
+      isSavedByMe: "isSavedByMe" in row ? !!row.isSavedByMe : false,
 
       author: {
         id: row.post.authorId,
@@ -110,6 +120,15 @@ class PostQueryService {
                   where ${postReactions.postId} = ${posts.id}
                   and ${postReactions.userId} = ${requesterId}
                   and ${postReactions.reactionType} = 'like'
+                )
+              `.mapWith(Boolean),
+
+              isSavedByMe: sql<boolean>`
+                exists(
+                  select 1
+                  from ${postSaves}
+                  where ${postSaves.postId} = ${posts.id}
+                  and ${postSaves.userId} = ${requesterId}
                 )
               `.mapWith(Boolean),
           }
@@ -178,6 +197,7 @@ class PostQueryService {
         ...post,
 
         isLikedByMe: "isLikedByMe" in row ? !!row.isLikedByMe : false,
+        isSavedByMe: "isSavedByMe" in row ? !!row.isSavedByMe : false,
 
         author: {
           id: post.authorId,
