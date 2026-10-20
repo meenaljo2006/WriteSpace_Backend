@@ -251,28 +251,61 @@ export class ReactionRepository {
   }
 
   async deletePostReaction(postId: string, userId: string) {
-    const result = await db
-      .delete(postReactions)
-      .where(
-        and(eq(postReactions.postId, postId), eq(postReactions.userId, userId)),
-      )
-      .returning();
+    return db.transaction(async (tx) => {
+      const result = await tx
+        .delete(postReactions)
+        .where(
+          and(
+            eq(postReactions.postId, postId),
+            eq(postReactions.userId, userId),
+          ),
+        )
+        .returning();
 
-    return result[0] ?? null;
+      const row = result[0] ?? null;
+
+      if (!row) return null;
+
+      if (row.reactionType === "like") {
+        await tx
+          .update(posts)
+          .set({
+            likeCount: sql`GREATEST(${posts.likeCount} - 1, 0)`,
+          })
+          .where(eq(posts.id, postId));
+      }
+
+      return row;
+    });
   }
 
   async deleteCommentReaction(commentId: string, userId: string) {
-    const result = await db
-      .delete(commentReactions)
-      .where(
-        and(
-          eq(commentReactions.commentId, commentId),
-          eq(commentReactions.userId, userId),
-        ),
-      )
-      .returning();
+    return db.transaction(async (tx) => {
+      const result = await tx
+        .delete(commentReactions)
+        .where(
+          and(
+            eq(commentReactions.commentId, commentId),
+            eq(commentReactions.userId, userId),
+          ),
+        )
+        .returning();
 
-    return result[0] ?? null;
+      const row = result[0] ?? null;
+
+      if (!row) return null;
+
+      if (row.reactionType === "like") {
+        await tx
+          .update(comments)
+          .set({
+            likeCount: sql`GREATEST(${comments.likeCount} - 1, 0)`,
+          })
+          .where(eq(comments.id, commentId));
+      }
+
+      return row;
+    });
   }
 
   async getPostReactionCounts(postId: string) {

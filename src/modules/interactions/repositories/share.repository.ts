@@ -1,20 +1,31 @@
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, lt,sql } from "drizzle-orm";
 
 import { db } from "../../../db";
-import { shares } from "../../../db/schema";
+import { posts, shares } from "../../../db/schema";
 
 export class ShareRepository {
   async createShare(userId: string, postId: string, platform: string) {
-    const result = await db
-      .insert(shares)
-      .values({
-        userId,
-        postId,
-        platform,
-      })
-      .returning();
+    return db.transaction(async (tx) => {
+      const result = await tx
+        .insert(shares)
+        .values({
+          userId,
+          postId,
+          platform,
+        })
+        .returning();
 
-    return result[0] ?? null;
+      const share = result[0] ?? null;
+
+      if (!share) return null;
+
+      await tx
+        .update(posts)
+        .set({ shareCount: sql`${posts.shareCount} + 1` })
+        .where(eq(posts.id, postId));
+
+      return share;
+    });
   }
 
   async getShareById(id: number) {
