@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { eq,sql } from "drizzle-orm";
 
 import { db } from "../../db";
-import { posts } from "../../db/schema";
+import { posts,users } from "../../db/schema";
+import { client as redis } from "@config/redis";
 
 import { AppError } from "@shared/utils/app.error";
 import { HTTP_STATUS } from "@shared/constants/http-codes";
@@ -52,6 +53,61 @@ class PostService {
       requesterId,
       authorIdFilter,
     );
+  }
+
+  /**
+   * Record a post view.
+   *
+   * - Increments posts.view_count and the author's users.total_reads.
+   * - Deduplicated per (user, post) for 1 hour via Redis so a single
+   *   user refreshing the page doesn't inflate the counter.
+   * - Safe to call repeatedly — repeated calls within the dedup window
+   *   return the current count without touching the database.
+  */
+  public async incrementViewCount(
+    postId: string,
+    viewerId: string,
+  ): Promise<{ viewCount: number; recorded: boolean }> {
+    const [post] = await db
+      .select({
+        authorId: posts.authorId,
+        viewCount: posts.viewCount,
+      })
+      .from(posts)
+      .where(eq(posts.id, postId))
+      .limit(1);
+
+    if (!post) {
+      throw new AppError(HTTP_STATUS.NOT_FOUND, "Post not found");
+    }
+
+    const dedupKey = `post:view:${postId}:${viewerId}`;
+
+    const setResult = await redis.set(dedupKey, "1", {
+      NX: true,
+      EX: 60 * 60,
+    });
+
+    if (setResult === null) {
+      return { viewCount: post.viewCount, recorded: false };
+    }
+
+    const newCount = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(posts)
+        .set({ viewCount: sql`${posts.viewCount} + 1` })
+        .where(eq(posts.id, postId))
+        .returning({ viewCount: posts.viewCount });
+
+      await tx
+        .update(users)
+        .set({ totalReads: sql`${users.totalReads} + 1` })
+        .where(eq(users.id, post.authorId));
+
+      return updated?.viewCount ?? post.viewCount + 1;
+    });
+
+    return { viewCount: newCount, recorded: true };
   }
 
   /**

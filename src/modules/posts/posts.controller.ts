@@ -428,6 +428,28 @@ class PostsController {
       next(error);
     }
   };
+
+  public incrementView = async (
+    req: AuthRequest,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const postId = req.params.id;
+      const viewerId = req.user!.id;
+
+      const result = await postService.incrementViewCount(postId, viewerId);
+
+      new ApiResponse(
+        res,
+        HTTP_STATUS.OK,
+        result.recorded ? "View recorded" : "View already counted",
+        result,
+      ).send();
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 export const postsController = new PostsController();

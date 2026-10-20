@@ -63,4 +63,10 @@ router.post(
   postsController.sharePost as RequestHandler,
 );
 
+router.post(
+  "/:id/view",
+  authenticate as RequestHandler,
+  postsController.incrementView as RequestHandler,
+);
+
 export const postsRoutes = router;
