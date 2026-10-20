@@ -1,7 +1,7 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, lt, sql ,SQL} from "drizzle-orm";
 
 import { db } from "../../../db";
-import { postSaves } from "../../../db/schema";
+import {follows, postReactions, posts, postSaves, users,} from "../../../db/schema";
 
 export class SaveRepository {
   async findSave(userId: string, postId: string) {
@@ -63,18 +63,68 @@ export class SaveRepository {
   }
 
   async getSavedPosts(userId: string, limit: number, cursor?: Date) {
-    const conditions = cursor
-      ? and(eq(postSaves.userId, userId), lt(postSaves.createdAt, cursor))
-      : eq(postSaves.userId, userId);
+    const conditions: SQL<unknown>[] = [eq(postSaves.userId, userId)];
+
+    if (cursor) {
+      conditions.push(lt(postSaves.createdAt, cursor));
+    }
 
     return db
       .select({
-        postId: postSaves.postId,
-        userId: postSaves.userId,
-        createdAt: postSaves.createdAt,
+        // Post fields
+        id: posts.id,
+        title: posts.title,
+        slug: posts.slug,
+        subtitle: posts.subtitle,
+        content: posts.content,
+        excerpt: posts.excerpt,
+        media: posts.media,
+        codeSnippets: posts.codeSnippets,
+        coverImageUrl: posts.coverImageUrl,
+        coverImageAltText: posts.coverImageAltText,
+        tags: posts.tags,
+        authorId: posts.authorId,
+        status: posts.status,
+        publishDate: posts.publishDate,
+        viewCount: posts.viewCount,
+        likeCount: posts.likeCount,
+        commentCount: posts.commentCount,
+        shareCount: posts.shareCount,
+        readTime: posts.readTime,
+        createdAt: posts.createdAt,
+
+        // Author
+        authorUsername: users.username,
+        authorProfileImage: users.profileImageUrl,
+        authorFullname: users.fullname,
+
+        // Save metadata (used for pagination cursor and cleanup)
+        savedAt: postSaves.createdAt,
+
+        // Viewer-relative flags
+        isLikedByMe: sql<boolean>`
+          exists(
+            select 1
+            from ${postReactions}
+            where ${postReactions.postId} = ${posts.id}
+              and ${postReactions.userId} = ${userId}
+              and ${postReactions.reactionType} = 'like'
+          )
+        `.mapWith(Boolean),
+
+        isFollowingByMe: sql<boolean>`
+          exists(
+            select 1
+            from ${follows}
+            where ${follows.followerId} = ${userId}
+              and ${follows.followingId} = ${posts.authorId}
+          )
+        `.mapWith(Boolean),
       })
       .from(postSaves)
-      .where(conditions)
+      .innerJoin(posts, eq(posts.id, postSaves.postId))
+      .innerJoin(users, eq(users.id, posts.authorId))
+      .where(and(...conditions))
       .orderBy(desc(postSaves.createdAt))
       .limit(limit);
   }
