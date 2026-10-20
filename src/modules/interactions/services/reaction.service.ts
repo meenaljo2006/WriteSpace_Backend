@@ -1,6 +1,10 @@
 import { interactionEventMapper } from "../events/interaction-event.mapper";
 import { interactionEventPublisher } from "../events/interaction-event.publisher";
 import { reactionRepository } from "../repositories/reaction.repository";
+import { notificationService } from "../../notification/notification.service"; 
+import { db } from "../../../db"; 
+import { posts, comments } from "../../../db/schema"; 
+import { eq } from "drizzle-orm"; 
 
 import type {
   ReactionResult,
@@ -58,6 +62,32 @@ export class ReactionService {
     });
 
     await interactionEventPublisher.publish(event);
+
+    try {
+      // Find out who owns the post or comment
+      let recipientId: string | null = null;
+      
+      if (targetType === "POST") {
+        const [post] = await db.select({ authorId: posts.authorId }).from(posts).where(eq(posts.id, targetId)).limit(1);
+        if (post) recipientId = post.authorId;
+      } else {
+        const [comment] = await db.select({ authorId: comments.authorId }).from(comments).where(eq(comments.id, targetId)).limit(1);
+        if (comment) recipientId = comment.authorId;
+      }
+
+      // If we found an author, and it's not the person reacting, send notification
+      if (recipientId && recipientId !== actorId) {
+        // If it's a post, we use sendLikeNotification. 
+        // If it's a comment reaction, we can just send a like notification for now.
+        await notificationService.sendLikeNotification(
+          recipientId,
+          actorId,
+          targetId,
+        );
+      }
+    } catch (error) {
+      console.error("Failed to send reaction notification", error);
+    }
 
     return {
       targetId,

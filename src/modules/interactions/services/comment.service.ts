@@ -1,7 +1,7 @@
 import { AppError } from "@shared/utils/app.error";
 import { HTTP_STATUS } from "@shared/constants/http-codes";
-
 import { commentRepository } from "../repositories/comment.repository";
+import { notificationService } from "../../notification/notification.service"; // ADD THIS
 
 export class CommentService {
   async createComment(
@@ -56,6 +56,34 @@ export class CommentService {
         HTTP_STATUS.INTERNAL_SERVER_ERROR,
         "Failed to fetch created comment",
       );
+    }
+
+    try {
+      if (parentCommentId) {
+        // Someone replied to a comment
+        const parentComment = await commentRepository.getCommentById(parentCommentId);
+        if (parentComment && parentComment.authorId !== userId) {
+          await notificationService.sendCommentNotification(
+            parentComment.authorId,
+            userId,
+            postId,
+            content.substring(0, 50) + (content.length > 50 ? "..." : ""),
+          );
+        }
+      } else {
+        // Someone commented on a post
+        if (post.authorId !== userId) {
+          await notificationService.sendCommentNotification(
+            post.authorId,
+            userId,
+            postId,
+            content.substring(0, 50) + (content.length > 50 ? "..." : ""),
+          );
+        }
+      }
+    } catch (error) {
+      // Don't fail the comment if notification fails
+      console.error("Failed to send comment notification", error);
     }
 
     return createdComment;
