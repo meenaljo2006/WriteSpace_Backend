@@ -298,7 +298,12 @@ export class CommentService {
       throw new AppError(HTTP_STATUS.NOT_FOUND, "Comment not found");
     }
 
-    if (comment.authorId !== userId && !isAdmin) {
+    // Check if the requester is the Post Owner
+    const post = await commentRepository.findPostForComment(comment.postId);
+    const isPostOwner = post?.authorId === userId;
+
+    // Allow if: Comment Owner OR Post Owner OR Admin
+    if (comment.authorId !== userId && !isPostOwner && !isAdmin) {
       throw new AppError(
         HTTP_STATUS.FORBIDDEN,
         "Not authorized to delete this comment",
