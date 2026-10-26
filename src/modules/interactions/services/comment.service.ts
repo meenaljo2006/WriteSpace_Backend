@@ -1,9 +1,61 @@
 import { AppError } from "@shared/utils/app.error";
 import { HTTP_STATUS } from "@shared/constants/http-codes";
 import { commentRepository } from "../repositories/comment.repository";
-import { notificationService } from "../../notification/notification.service"; // ADD THIS
+import { notificationService } from "../../notification/notification.service";
+import profanity from "leo-profanity";
+import Sentiment from "sentiment";
+
+const sentimentAnalyzer = new Sentiment();
+
+// Helper function
+function analyzeComment(text: string) {
+  const lowerText = text.toLowerCase();
+
+  // 1. Normalize leetspeak 
+  const normalizedText = lowerText
+    .replace(/[@]/g, "a")
+    .replace(/[!|1]/g, "i")
+    .replace(/[0]/g, "o")
+    .replace(/[$|5]/g, "s")
+    .replace(/[^a-z0-9\s]/g, "");
+
+  // 2. STRICT REGEX 
+  const profanityPatterns = [
+    /f[\W_]*[uU]?[\W_]*[cC]?[\W_]*[kK]/i, 
+    /s[\W_]*[hH][\W_]*[iI][\W_]*[tT]/i,    
+    /b[\W_]*[iI][\W_]*[tT][\W_]*[cC][\W_]*[hH]/i, 
+    /a[\W_]*[sS][\W_]*[sS]/i,              
+    /d[\W_]*[iI][\W_]*[cC][\W_]*[kK]/i,    
+  ];
+
+  const hasRegexProfanity = profanityPatterns.some((pattern) =>
+    pattern.test(lowerText)
+  );
+
+  // 3. Check Profanity
+  const isProfane = profanity.check(normalizedText) || hasRegexProfanity;
+
+  // 4. Check Spam (2+ links)
+  const linkCount = (text.match(/https?:\/\//gi) || []).length;
+  const isSpam = linkCount >= 2;
+
+  // 5. Status Check
+  const status: "visible" | "shadowbanned" =
+    isProfane || isSpam ? "shadowbanned" : "visible";
+
+  // 6. Sentiment Check
+  let sentiment: "neutral" | "positive" | "negative" = "neutral";
+  if (!isProfane && !isSpam) {
+    const result = sentimentAnalyzer.analyze(text);
+    if (result.score > 0) sentiment = "positive";
+    else if (result.score < 0) sentiment = "negative";
+  }
+
+  return { status, sentiment };
+}
 
 export class CommentService {
+  
   async createComment(
     userId: string,
     postId: string,
@@ -32,11 +84,15 @@ export class CommentService {
       }
     }
 
+    const { status, sentiment } = analyzeComment(content);
+
     const comment = await commentRepository.createComment(
       postId,
       userId,
       content,
       parentCommentId,
+      status, 
+      sentiment
     );
 
     if (!comment) {
@@ -68,6 +124,7 @@ export class CommentService {
             userId,
             postId,
             content.substring(0, 50) + (content.length > 50 ? "..." : ""),
+            sentiment
           );
         }
       } else {
@@ -78,6 +135,7 @@ export class CommentService {
             userId,
             postId,
             content.substring(0, 50) + (content.length > 50 ? "..." : ""),
+            sentiment
           );
         }
       }
@@ -210,9 +268,13 @@ export class CommentService {
       );
     }
 
+    const { status, sentiment } = analyzeComment(normalizedContent);
+
     const updated = await commentRepository.updateComment(
       commentId,
       normalizedContent,
+      status,     
+      sentiment, 
     );
 
     if (!updated) {

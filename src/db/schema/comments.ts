@@ -1,16 +1,9 @@
-import {
-  pgTable,
-  uuid,
-  boolean,
-  integer,
-  timestamp,
-  index,
-  varchar,
-  AnyPgColumn,
-} from "drizzle-orm/pg-core";
-
+import { pgTable, uuid, boolean, integer, timestamp, index, varchar, AnyPgColumn, text, pgEnum } from "drizzle-orm/pg-core";
 import { users } from "./users";
 import { posts } from "./posts";
+
+export const commentStatusEnum = pgEnum("comment_status", ["visible", "shadowbanned"]);
+export const commentSentimentEnum = pgEnum("comment_sentiment", ["positive", "negative", "neutral"]);
 
 export const comments = pgTable(
   "comments",
@@ -40,6 +33,9 @@ export const comments = pgTable(
     likeCount: integer("like_count").default(0).notNull(),
     replyCount: integer("reply_count").default(0).notNull(),
     isEdited: boolean("is_edited").default(false).notNull(),
+
+    status: commentStatusEnum("status").default("visible").notNull(),
+    sentiment: commentSentimentEnum("sentiment").default("neutral").notNull(),
 
     createdAt: timestamp("created_at", {
       withTimezone: true,

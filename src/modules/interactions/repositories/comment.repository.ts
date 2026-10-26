@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, sql, or } from "drizzle-orm";
 
 import { db } from "../../../db";
 import { comments, commentReactions, posts, users } from "../../../db/schema";
@@ -22,6 +22,8 @@ export class CommentRepository {
     authorId: string,
     content: string,
     parentCommentId?: string | null,
+    status: "visible" | "shadowbanned" = "visible",
+    sentiment: "positive" | "negative" | "neutral" = "neutral",
   ) {
     return db.transaction(async (tx) => {
       const [createdComment] = await tx
@@ -31,6 +33,8 @@ export class CommentRepository {
           postId,
           authorId,
           parentCommentId: parentCommentId ?? null,
+          status,
+          sentiment,
         })
         .returning({
           id: comments.id,
@@ -42,17 +46,13 @@ export class CommentRepository {
 
       await tx
         .update(posts)
-        .set({
-          commentCount: sql`${posts.commentCount} + 1`,
-        })
+        .set({ commentCount: sql`${posts.commentCount} + 1` })
         .where(eq(posts.id, postId));
 
       if (parentCommentId) {
         await tx
           .update(comments)
-          .set({
-            replyCount: sql`${comments.replyCount} + 1`,
-          })
+          .set({ replyCount: sql`${comments.replyCount} + 1` })
           .where(eq(comments.id, parentCommentId));
       }
 
@@ -60,6 +60,7 @@ export class CommentRepository {
     });
   }
 
+  // Filter out shadowbanned comments for everyone EXCEPT the author
   async getTopLevelComments(
     postId: string,
     limit: number,
@@ -69,6 +70,9 @@ export class CommentRepository {
     const conditions = [
       eq(comments.postId, postId),
       isNull(comments.parentCommentId),
+      requesterId
+        ? or(eq(comments.status, "visible"), eq(comments.authorId, requesterId))
+        : eq(comments.status, "visible"),
     ];
 
     if (cursor) {
@@ -82,6 +86,8 @@ export class CommentRepository {
         parentCommentId: comments.parentCommentId,
         replyCount: comments.replyCount,
         isEdited: comments.isEdited,
+        status: comments.status,       
+        sentiment: comments.sentiment, 
         createdAt: comments.createdAt,
         updatedAt: comments.updatedAt,
 
@@ -114,13 +120,19 @@ export class CommentRepository {
       .limit(limit);
   }
 
+  //Filter out shadowbanned replies
   async getCommentReplies(
     parentCommentId: string,
     limit: number,
     cursor?: Date,
     requesterId?: string,
   ) {
-    const conditions = [eq(comments.parentCommentId, parentCommentId)];
+    const conditions = [
+      eq(comments.parentCommentId, parentCommentId),
+      requesterId
+        ? or(eq(comments.status, "visible"), eq(comments.authorId, requesterId))
+        : eq(comments.status, "visible"),
+    ];
 
     if (cursor) {
       conditions.push(lt(comments.createdAt, cursor));
@@ -133,6 +145,8 @@ export class CommentRepository {
         parentCommentId: comments.parentCommentId,
         replyCount: comments.replyCount,
         isEdited: comments.isEdited,
+        status: comments.status,       
+        sentiment: comments.sentiment, 
         createdAt: comments.createdAt,
         updatedAt: comments.updatedAt,
 
@@ -175,6 +189,8 @@ export class CommentRepository {
         parentCommentId: comments.parentCommentId,
         replyCount: comments.replyCount,
         isEdited: comments.isEdited,
+        status: comments.status,
+        sentiment: comments.sentiment,
         createdAt: comments.createdAt,
         updatedAt: comments.updatedAt,
 
@@ -259,12 +275,19 @@ export class CommentRepository {
     });
   }
 
-  async updateComment(commentId: string, content: string) {
+  async updateComment(
+    commentId: string,
+    content: string,
+    status: "visible" | "shadowbanned",
+    sentiment: "positive" | "negative" | "neutral",
+  ) {
     const result = await db
       .update(comments)
       .set({
         content,
         isEdited: true,
+        status,
+        sentiment,
       })
       .where(eq(comments.id, commentId))
       .returning({

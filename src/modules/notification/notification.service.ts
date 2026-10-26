@@ -161,12 +161,16 @@ class NotificationService implements INotificationService {
     actorId: string,
     postId: string,
     commentPreview: string,
+    sentiment: string = "neutral"
   ): Promise<void> {
     if (recipientId === actorId) return;
+    const messageStr = sentiment === "negative" 
+      ? `left a critical comment: "${commentPreview}"`
+      : `commented: "${commentPreview}"`;
     await this.createInAppNotification(
       recipientId,
       NotificationType.COMMENT,
-      `commented: "${commentPreview}"`,
+      messageStr,
       postId,
       actorId,
     );
